@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition micro:bit</title>
+    <link rel="manifest" href="manifest.json">
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
+
+    <style>
+    /* Reset básico para asegurar que todo use el 100% de la pantalla */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body { 
+        font-family: 'Segoe UI', Roboto, sans-serif; 
+        text-align: center; 
+        background-color: #f4f4f9; 
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh; /* Ocupa todo el alto de la pantalla */
+        padding: 20px;
+    }
+
+    h1 { 
+        font-size: 1.5rem; 
+        margin-bottom: 20px; 
+        color: #333;
+    }
+
+    .setup-box { 
+        background: white; 
+        padding: 20px; 
+        border-radius: 15px; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1); 
+        width: 100%;
+        max-width: 400px; /* No se estira demasiado en tablets */
+        margin-bottom: 20px; 
+    }
+
+    input { 
+        padding: 12px; 
+        width: 100%; /* Se adapta al ancho del contenedor */
+        border: 2px solid #ddd; 
+        border-radius: 8px; 
+        margin: 15px 0; 
+        font-size: 16px; /* Evita el zoom automático en iOS/Android */
+    }
+
+    /* Recuadro de la cámara mejorado */
+    #webcam-container { 
+        margin: 15px auto; 
+        border: 6px solid #333; 
+        border-radius: 20px;
+        width: 280px;  /* Tamaño ideal para la mayoría de móviles */
+        height: 280px; 
+        overflow: hidden;
+        background-color: #000;
+        display: none; 
+        box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+    }
+
+    #webcam-container canvas {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover;
+    }
+
+    #label-container { 
+        font-size: 22px; 
+        font-weight: bold; 
+        color: #007bff; 
+        margin-top: 15px;
+        min-height: 30px;
+    }
+
+    button { 
+        width: 100%;
+        padding: 15px; 
+        font-size: 18px; 
+        font-weight: bold;
+        cursor: pointer; 
+        background: #28a745; 
+        color: white; 
+        border: none; 
+        border-radius: 10px;
+        transition: transform 0.2s, background 0.2s;
+    }
+
+    button:active {
+        transform: scale(0.98); /* Efecto visual al tocar en el móvil */
+        background: #218838;
+    }
+
+    button:disabled { background: #ccc; }
+</style>
+</head>
+<body>
+    <h1>Micro:bit Face Link</h1>
+
+    <div class="setup-box" id="setup-ui">
+    <p>1. Selecciona el tipo de modelo:</p>
+    <select id="model-type" style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px;">
+        <option value="image">Imagen (Webcam)</option>
+        <option value="pose">Postura (Cuerpo completo)</option>
+        <option value="audio">Sonido (Micrófono)</option>
+    </select>
+
+    <p>2. Pega tu URL de Teachable Machine:</p>
+    <input type="text" id="model-url" placeholder="https://teachablemachine.withgoogle.com..." />
+    
+    <p>3. Conectar dispositivo:</p>
+    <button id="start-btn" onclick="init()">Conectar micro:bit & Iniciar</button>
+</div>
+    
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+
+    <script>
+let model, webcam, recognizer, uartCharacteristic;
+let lastPrediction = "";
+let modelType = "";
+
+async function init() {
+    const urlInput = document.getElementById("model-url").value.trim();
+    modelType = document.getElementById("model-type").value;
+    
+    if (!urlInput.startsWith("https://teachablemachine.withgoogle.com")) {
+        alert("Por favor, ingresa una URL válida.");
+        return;
+    }
+
+    const TM_MODEL_URL = urlInput.endsWith("/") ? urlInput : urlInput + "/";
+
+    try {
+        // Bluetooth
+        const device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+        });
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+        uartCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+        
+        document.getElementById("setup-ui").style.display = "none";
+        
+        // Iniciar ML según el tipo
+        if (modelType === "audio") {
+            startAudioML(TM_MODEL_URL);
+        } else {
+            document.getElementById("webcam-container").style.display = "block";
+            startVisualML(TM_MODEL_URL, modelType); 
+        }
+    } catch (error) { 
+        console.error(error); 
+        alert("Error de conexión. Revisa el Bluetooth o la URL.");
+    }
+}
+
+// LÓGICA PARA IMAGEN Y POSTURA
+async function startVisualML(modelUrl, type) {
+    const modelJson = modelUrl + "model.json";
+    const metadataJson = modelUrl + "metadata.json";
+
+    if (type === "image") {
+        model = await tmImage.load(modelJson, metadataJson);
+    } else {
+        model = await tmPose.load(modelJson, metadataJson);
+    }
+
+    webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(300, 300, true);
+    await webcam.setup();
+    await webcam.play();
+    document.getElementById("webcam-container").appendChild(webcam.canvas);
+    window.requestAnimationFrame(visualLoop);
+}
+
+async function visualLoop() {
+    webcam.update();
+    const prediction = await (modelType === "image" ? model.predict(webcam.canvas) : model.estimatePose(webcam.canvas).then(() => model.predict(webcam.canvas)));
+    processPredictions(prediction);
+    window.requestAnimationFrame(visualLoop);
+}
+
+// LÓGICA PARA AUDIO
+async function startAudioML(modelUrl) {
+    const checkpoint = modelUrl + "model.json";
+    const metadata = modelUrl + "metadata.json";
+
+    recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
+    await recognizer.ensureModelLoaded();
+
+    recognizer.listen(result => {
+        const labels = recognizer.wordLabels();
+        const scores = result.scores;
+        let highestScore = 0;
+        let bestLabel = "";
+
+        for (let i = 0; i < labels.length; i++) {
+            if (scores[i] > highestScore) {
+                highestScore = scores[i];
+                bestLabel = labels[i];
+            }
+        }
+        
+        if (highestScore > 0.85 && bestLabel !== "Background Noise") {
+            processPredictions([{ className: bestLabel, probability: highestScore }]);
+        }
+    }, { probabilityThreshold: 0.75 });
+}
+
+// PROCESADOR UNIVERSAL PARA MICRO:BIT
+function processPredictions(predictions) {
+    for (let i = 0; i < predictions.length; i++) {
+        if (predictions[i].probability > 0.90) {
+            const detectedName = predictions[i].className;
+            if (detectedName !== lastPrediction) {
+                lastPrediction = detectedName;
+                document.getElementById("label-container").innerText = "Detectado: " + detectedName;
+                sendToMicrobit(detectedName);
+            }
+        }
+    }
+}
+
+        async function sendToMicrobit(name) {
+            if (uartCharacteristic) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(name + "\n");
+                try {
+                    await uartCharacteristic.writeValue(data);
+                    console.log("Sent: " + name);
+                } catch (e) {
+                    console.log("Bluetooth Send Error:", e);
+                    lastPrediction = ""; // Reset to allow retry
+                }
+            }
+        }
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
