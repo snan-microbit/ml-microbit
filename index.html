@@ -10,15 +10,23 @@ html
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8.5/dist/teachablemachine-pose.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script>
+
+    <link rel="manifest" href="manifest.json">
     
     <style>
+        /* CONFIGURACIÓN DE PANTALLA COMPLETA Y BLOQUEO DE ZOOM */
         html, body { 
             margin: 0; padding: 0; width: 100%; height: 100%;
             overflow-x: hidden; touch-action: none;
-            font-family: 'Segoe UI', sans-serif; background-color: #f4f4f9;
+            font-family: 'Segoe UI', Roboto, sans-serif; 
+            background-color: #f4f4f9; 
         }
 
-        body { display: flex; flex-direction: column; align-items: center; padding: 10px; }
+        body { 
+            display: flex; flex-direction: column; 
+            align-items: center; justify-content: flex-start; 
+            padding: 10px; 
+        }
 
         h1 { font-size: 2.2rem; color: #333; margin: 20px 0; }
 
@@ -32,27 +40,34 @@ html
 
         input, select { 
             padding: 18px; width: 100%; border: 2px solid #bbb; 
-            border-radius: 12px; margin-bottom: 25px; font-size: 20px !important;
+            border-radius: 12px; margin-bottom: 25px; 
+            font-size: 20px !important; background-color: #fafafa;
         }
 
+        /* VISTA DE CÁMARA GRANDE */
         #webcam-container { 
-            margin: 10px auto; border: 4px solid #333; border-radius: 15px;
+            margin: 10px auto; border: 5px solid #333; border-radius: 20px;
             width: 90vw; height: 90vw; max-width: 500px; max-height: 500px;
             overflow: hidden; background-color: #000; display: none; 
+            box-shadow: 0 8px 15px rgba(0,0,0,0.2);
         }
 
         #webcam-container canvas { width: 100% !important; height: 100% !important; object-fit: cover; }
 
+        /* TEXTO DE DETECCIÓN GIGANTE Y NEGRO */
         #label-container { 
             font-size: 45px; font-weight: 900; color: #000000; 
             margin-top: 20px; text-transform: uppercase; 
         }
 
+        /* BOTÓN DE CONEXIÓN */
         button { 
             width: 100%; padding: 22px; font-size: 22px; font-weight: 900;
             background: #28a745; color: white; border: none; border-radius: 15px;
             text-transform: uppercase; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(40, 167, 69, 0.3);
         }
+
         button:active { transform: scale(0.97); background: #218838; }
     </style>
 </head>
@@ -68,7 +83,7 @@ html
         </select>
 
         <p>2. URL de Teachable Machine:</p>
-        <input type="text" id="model-url" placeholder="https://teachablemachine..." />
+        <input type="text" id="model-url" placeholder="https://teachablemachine.withgoogle.com..." />
         
         <p>3. Conexión:</p>
         <button id="start-btn" onclick="init()">Conectar e Iniciar</button>
@@ -82,24 +97,29 @@ html
         let lastPrediction = "";
         let modelType = "";
 
-        // Anti-Zoom
-        document.addEventListener('touchmove', (e) => { if (e.scale !== 1) e.preventDefault(); }, { passive: false });
+        // BLOQUEO MANUAL DE PELLIZCO (ANTI-ZOOM)
+        document.addEventListener('touchmove', (e) => {
+            if (e.scale !== 1) { e.preventDefault(); }
+        }, { passive: false });
 
         async function init() {
             const urlInput = document.getElementById("model-url").value.trim();
             modelType = document.getElementById("model-type").value;
             
             if (!urlInput.includes("teachablemachine.withgoogle.com")) {
-                alert("Ingresa una URL válida de Teachable Machine");
+                alert("Ingresa una URL válida de Teachable Machine.");
                 return;
             }
 
             const TM_MODEL_URL = urlInput.endsWith("/") ? urlInput : urlInput + "/";
 
             try {
-                // Bluetooth con Filtro
+                // BLUETOOTH CON FILTRO MEJORADO
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'BBC micro:bit' }],
+                    filters: [
+                        { namePrefix: 'BBC micro:bit' },
+                        { namePrefix: 'micro:bit' }
+                    ],
                     optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
                 });
 
@@ -117,14 +137,19 @@ html
                 }
             } catch (error) { 
                 console.error(error); 
-                alert("Error: Asegúrate de usar HTTPS y activar el Bluetooth.");
+                alert("Error de conexión. Asegúrate de usar HTTPS, tener el Bluetooth activo y que la micro:bit esté en modo emparejamiento.");
             }
         }
 
         async function startVisualML(modelUrl, type) {
             const modelJson = modelUrl + "model.json";
             const metadataJson = modelUrl + "metadata.json";
-            model = (type === "image") ? await tmImage.load(modelJson, metadataJson) : await tmPose.load(modelJson, metadataJson);
+            
+            if (type === "image") {
+                model = await tmImage.load(modelJson, metadataJson);
+            } else {
+                model = await tmPose.load(modelJson, metadataJson);
+            }
 
             webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(400, 400, true);
             await webcam.setup();
@@ -169,6 +194,7 @@ html
         }
 
         function processPredictions(predictions) {
+            if (!predictions) return;
             for (let i = 0; i < predictions.length; i++) {
                 if (predictions[i].probability > 0.90) {
                     const detectedName = predictions[i].className;
@@ -185,9 +211,23 @@ html
             if (uartCharacteristic) {
                 try {
                     const encoder = new TextEncoder();
-                    await uartCharacteristic.writeValue(encoder.encode(name + "\n"));
-                } catch (e) { console.log("Error Bluetooth:", e); }
+                    const data = encoder.encode(name + "\n");
+                    await uartCharacteristic.writeValue(data);
+                    console.log("Enviado a microbit: " + name);
+                } catch (e) { 
+                    console.log("Error al enviar Bluetooth:", e); 
+                    lastPrediction = ""; 
+                }
             }
+        }
+
+        // REGISTRO DE SERVICE WORKER PARA PWA (INSTALACIÓN)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('SW registrado'))
+                    .catch(err => console.log('Error SW', err));
+            });
         }
     </script>
 </body>
