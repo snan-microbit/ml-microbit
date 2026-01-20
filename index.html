@@ -168,22 +168,21 @@
 
             try {
                 // BLUETOOTH CON FILTRO MEJORADO
-                 const device = await navigator.bluetooth.requestDevice({
+                 /*const device = await navigator.bluetooth.requestDevice({
                     filters: [
                         { namePrefix: 'BBC micro:bit' },
                         { namePrefix: 'micro:bit' }
-                        /*{services: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']}*/
+                        {services: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']}
                     ],
                     optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
-                }); 
+                }); */
 
-               /* const device = await navigator.bluetooth.requestDevice({
-                    // Aceptamos cualquier dispositivo que ofrezca el servicio UART
-                    filters: [{
-                        services: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
-                    }],
+               const device = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { services: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e'] } // Busca por servicio, no por nombre
+                    ],
                     optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
-                });*/
+                });
 
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
