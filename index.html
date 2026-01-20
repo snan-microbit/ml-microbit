@@ -1,10 +1,10 @@
+html
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ML-micro:bit</title>
-    <link rel="manifest" href="manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+    <title>ML-micro:bit 2026</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
@@ -12,283 +12,182 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script>
     
     <style>
-    /* BLOQUEO DE PANTALLA Y ZOOM */
         html, body { 
-            margin: 0; padding: 0; 
-            width: 100%; height: 100%;
-            overflow: hidden; /* Evita que la pantalla se mueva */
-            touch-action: none; /* Desactiva gestos automáticos de zoom */
-            font-family: 'Segoe UI', sans-serif;
-            background-color: #f4f4f9;
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow-x: hidden; touch-action: none;
+            font-family: 'Segoe UI', sans-serif; background-color: #f4f4f9;
         }
 
-   body { 
-    font-family: 'Segoe UI', Roboto, sans-serif; 
-    text-align: center; 
-    background-color: #f4f4f9; 
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start; /* Cambiado de center para que no se corte arriba */
-    min-height: 100vh;
-    width: 100vw; /* Asegura el ancho total */
-    padding: 10px; /* Menos padding para ganar espacio */
-    overflow-x: hidden; /* Evita desplazamiento lateral */
-}
+        body { display: flex; flex-direction: column; align-items: center; padding: 10px; }
 
-    h1 { 
-    font-size: 2.2rem; 
-    color: #333; 
-    margin: 20px 0; 
-}
+        h1 { font-size: 2.2rem; color: #333; margin: 20px 0; }
 
-    .setup-box { 
-    background: white; 
-    padding: 30px; /* Más espacio interno */
-    border-radius: 20px; 
-    box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
-    width: 95%; 
-    max-width: 450px;
-    touch-action: pan-y;
-}
+        .setup-box { 
+            background: white; padding: 30px; border-radius: 20px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+            width: 95%; max-width: 450px; touch-action: pan-y;
+        }
 
-/* Textos de los pasos (1, 2, 3) */
-.setup-box p {
-    font-size: 1.3rem;
-    font-weight: bold;
-    margin-bottom: 10px;
-    text-align: left;
-}
+        .setup-box p { font-size: 1.3rem; font-weight: bold; margin-bottom: 10px; text-align: left; }
 
+        input, select { 
+            padding: 18px; width: 100%; border: 2px solid #bbb; 
+            border-radius: 12px; margin-bottom: 25px; font-size: 20px !important;
+        }
 
-    /* Selectores y cajas de texto más grandes */
-input, select { 
-    padding: 18px; /* Mucho más altos para tocar fácil */
-    width: 100%; 
-    border: 2px solid #bbb; 
-    border-radius: 12px; 
-    margin-bottom: 25px; /* Más separación entre pasos */
-    font-size: 20px !important; /* Texto grande dentro */
-    background-color: #fafafa;
-}
+        #webcam-container { 
+            margin: 10px auto; border: 4px solid #333; border-radius: 15px;
+            width: 90vw; height: 90vw; max-width: 500px; max-height: 500px;
+            overflow: hidden; background-color: #000; display: none; 
+        }
 
-   /* Ajuste de la cámara para que sea más grande */
-#webcam-container { 
-    margin: 10px auto; 
-    border: 4px solid #333; 
-    border-radius: 15px;
-    width: 90vw;  /* 90% del ancho de la pantalla */
-    height: 90vw; /* Mantiene formato cuadrado */
-    max-width: 800px; /* Límite para que no sea gigante en tablets */
-    max-height: 800;
-    overflow: hidden;
-    background-color: #000;
-    display: none; 
-}
+        #webcam-container canvas { width: 100% !important; height: 100% !important; object-fit: cover; }
 
-    #webcam-container canvas {
-        width: 100% !important;
-        height: 100% !important;
-        object-fit: cover;
-    }
+        #label-container { 
+            font-size: 45px; font-weight: 900; color: #000000; 
+            margin-top: 20px; text-transform: uppercase; 
+        }
 
-    #label-container { 
-    font-size: 40px;      /* Tamaño mucho más grande */
-    font-weight: 900;     /* Grosor extra negrita */
-    color: #000000;       /* Color negro puro */
-    margin-top: 20px;     /* Espacio respecto al video */
-    text-transform: uppercase; /* Opcional: todo en mayúsculas para que destaque más */
-}
-
-   /* Botón gigante y llamativo */
-button { 
-    width: 100%; 
-    padding: 22px; 
-    font-size: 22px; 
-    font-weight: 900;
-    background: #28a745; 
-    color: white; 
-    border: none; 
-    border-radius: 15px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    box-shadow: 0 4px 10px rgba(40, 167, 69, 0.3);
-}
-
-   button:active {
-    background: #218838;
-    transform: scale(0.97);
-}
-
-    button:disabled { background: #ccc; }
-</style>
+        button { 
+            width: 100%; padding: 22px; font-size: 22px; font-weight: 900;
+            background: #28a745; color: white; border: none; border-radius: 15px;
+            text-transform: uppercase; cursor: pointer;
+        }
+        button:active { transform: scale(0.97); background: #218838; }
+    </style>
 </head>
 <body>
     <h1>ML-micro:bit</h1>
 
     <div class="setup-box" id="setup-ui">
-    <p>1. Selecciona el tipo de modelo:</p>
-    <select id="model-type" style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px;">
-        <option value="image">Imagen (Webcam)</option>
-        <option value="pose">Postura (Cuerpo completo)</option>
-        <option value="audio">Sonido (Micrófono)</option>
-    </select>
+        <p>1. Tipo de modelo:</p>
+        <select id="model-type">
+            <option value="image">Imagen (Webcam)</option>
+            <option value="pose">Postura (Cuerpo)</option>
+            <option value="audio">Sonido (Micrófono)</option>
+        </select>
 
-    <p>2. Pega tu URL de Teachable Machine:</p>
-    <input type="text" id="model-url" placeholder="https://teachablemachine.withgoogle.com..." />
-    
-    <p>3. Conectar dispositivo:</p>
-    <button id="start-btn" onclick="init()">Conectar micro:bit & Iniciar</button>
-</div>
+        <p>2. URL de Teachable Machine:</p>
+        <input type="text" id="model-url" placeholder="https://teachablemachine..." />
+        
+        <p>3. Conexión:</p>
+        <button id="start-btn" onclick="init()">Conectar e Iniciar</button>
+    </div>
     
     <div id="webcam-container"></div>
     <div id="label-container"></div>
 
     <script>
-let model, webcam, recognizer, uartCharacteristic;
-let lastPrediction = "";
-let modelType = "";
+        let model, webcam, recognizer, uartCharacteristic;
+        let lastPrediction = "";
+        let modelType = "";
 
-// SCRIPT ANTI-ZOOM (PELLIZCO)
- document.addEventListener('touchmove', function(e) {
-            if (e.scale !== 1) { e.preventDefault(); }
-        }, { passive: false });
+        // Anti-Zoom
+        document.addEventListener('touchmove', (e) => { if (e.scale !== 1) e.preventDefault(); }, { passive: false });
 
-async function init() {
-    const urlInput = document.getElementById("model-url").value.trim();
-    modelType = document.getElementById("model-type").value;
-    
-    if (!urlInput.startsWith("https://teachablemachine.withgoogle.com")) {
-        alert("Por favor, ingresa una URL válida.");
-        return;
-    }
+        async function init() {
+            const urlInput = document.getElementById("model-url").value.trim();
+            modelType = document.getElementById("model-type").value;
+            
+            if (!urlInput.includes("teachablemachine.withgoogle.com")) {
+                alert("Ingresa una URL válida de Teachable Machine");
+                return;
+            }
 
-    const TM_MODEL_URL = urlInput.endsWith("/") ? urlInput : urlInput + "/";
+            const TM_MODEL_URL = urlInput.endsWith("/") ? urlInput : urlInput + "/";
 
-    try {
-        // Bluetooth
-        const device = await navigator.bluetooth.requestDevice({
-    filters: [
-        { namePrefix: 'BBC micro:bit' }
-    ],
-    // Al declarar el servicio UART aquí, el navegador sabe que 
-    // debe negociar una conexión segura para acceder a los datos.
-    optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
-});
+            try {
+                // Bluetooth con Filtro
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'BBC micro:bit' }],
+                    optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+                });
 
-// Esto iniciará el proceso de vinculación del sistema operativo
-const server = await device.gatt.connect();
-        
-        const server = await device.gatt.connect();
-        const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-        uartCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
-        
-        document.getElementById("setup-ui").style.display = "none";
-        
-        // Iniciar ML según el tipo
-        if (modelType === "audio") {
-            startAudioML(TM_MODEL_URL);
-        } else {
-            document.getElementById("webcam-container").style.display = "block";
-            startVisualML(TM_MODEL_URL, modelType); 
-        }
-    } catch (error) { 
-        console.error(error); 
-        alert("Error de conexión. Revisa el Bluetooth o la URL.");
-    }
-}
-
-// LÓGICA PARA IMAGEN Y POSTURA
-async function startVisualML(modelUrl, type) {
-    const modelJson = modelUrl + "model.json";
-    const metadataJson = modelUrl + "metadata.json";
-
-    if (type === "image") {
-        model = await tmImage.load(modelJson, metadataJson);
-    } else {
-        model = await tmPose.load(modelJson, metadataJson);
-    }
-
-    webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(800, 800, true);
-    await webcam.setup();
-    await webcam.play();
-    document.getElementById("webcam-container").appendChild(webcam.canvas);
-    window.requestAnimationFrame(visualLoop);
-}
-
-async function visualLoop() {
-    webcam.update();
-    let prediction;
-    
-    if (modelType === "image") {
-        prediction = await model.predict(webcam.canvas);
-    } else if (modelType === "pose") {
-        // Los modelos de Pose necesitan primero estimar la pose y luego predecir
-        const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
-        prediction = await model.predict(posenetOutput);
-    }
-    
-    processPredictions(prediction);
-    window.requestAnimationFrame(visualLoop);
-}
-
-// LÓGICA PARA AUDIO
-async function startAudioML(modelUrl) {
-    const checkpoint = modelUrl + "model.json";
-    const metadata = modelUrl + "metadata.json";
-
-    recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
-    await recognizer.ensureModelLoaded();
-
-    recognizer.listen(result => {
-        const labels = recognizer.wordLabels();
-        const scores = result.scores;
-        let highestScore = 0;
-        let bestLabel = "";
-
-        for (let i = 0; i < labels.length; i++) {
-            if (scores[i] > highestScore) {
-                highestScore = scores[i];
-                bestLabel = labels[i];
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+                uartCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+                
+                document.getElementById("setup-ui").style.display = "none";
+                
+                if (modelType === "audio") {
+                    startAudioML(TM_MODEL_URL);
+                } else {
+                    document.getElementById("webcam-container").style.display = "block";
+                    startVisualML(TM_MODEL_URL, modelType); 
+                }
+            } catch (error) { 
+                console.error(error); 
+                alert("Error: Asegúrate de usar HTTPS y activar el Bluetooth.");
             }
         }
-        
-        if (highestScore > 0.85 && bestLabel !== "Background Noise") {
-            processPredictions([{ className: bestLabel, probability: highestScore }]);
-        }
-    }, { probabilityThreshold: 0.75 });
-}
 
-// PROCESADOR UNIVERSAL PARA MICRO:BIT
-function processPredictions(predictions) {
-    for (let i = 0; i < predictions.length; i++) {
-        if (predictions[i].probability > 0.90) {
-            const detectedName = predictions[i].className;
-            if (detectedName !== lastPrediction) {
-                lastPrediction = detectedName;
-                document.getElementById("label-container").innerText = "Detectado: " + detectedName;
-                sendToMicrobit(detectedName);
+        async function startVisualML(modelUrl, type) {
+            const modelJson = modelUrl + "model.json";
+            const metadataJson = modelUrl + "metadata.json";
+            model = (type === "image") ? await tmImage.load(modelJson, metadataJson) : await tmPose.load(modelJson, metadataJson);
+
+            webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(400, 400, true);
+            await webcam.setup();
+            await webcam.play();
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            window.requestAnimationFrame(visualLoop);
+        }
+
+        async function visualLoop() {
+            webcam.update();
+            let prediction;
+            if (modelType === "image") {
+                prediction = await model.predict(webcam.canvas);
+            } else {
+                const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+                prediction = await model.predict(posenetOutput);
             }
+            processPredictions(prediction);
+            window.requestAnimationFrame(visualLoop);
         }
-    }
-}
 
-        async function sendToMicrobit(name) {
-            if (uartCharacteristic) {
-                const encoder = new TextEncoder();
-                const data = encoder.encode(name + "\n");
-                try {
-                    await uartCharacteristic.writeValue(data);
-                    console.log("Sent: " + name);
-                } catch (e) {
-                    console.log("Bluetooth Send Error:", e);
-                    lastPrediction = ""; // Reset to allow retry
+        async function startAudioML(modelUrl) {
+            const checkpoint = modelUrl + "model.json";
+            const metadata = modelUrl + "metadata.json";
+            recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
+            await recognizer.ensureModelLoaded();
+
+            recognizer.listen(result => {
+                const labels = recognizer.wordLabels();
+                let highestScore = 0;
+                let bestLabel = "";
+                for (let i = 0; i < labels.length; i++) {
+                    if (result.scores[i] > highestScore) {
+                        highestScore = result.scores[i];
+                        bestLabel = labels[i];
+                    }
+                }
+                if (highestScore > 0.85 && bestLabel !== "Background Noise") {
+                    processPredictions([{ className: bestLabel, probability: highestScore }]);
+                }
+            }, { probabilityThreshold: 0.75 });
+        }
+
+        function processPredictions(predictions) {
+            for (let i = 0; i < predictions.length; i++) {
+                if (predictions[i].probability > 0.90) {
+                    const detectedName = predictions[i].className;
+                    if (detectedName !== lastPrediction) {
+                        lastPrediction = detectedName;
+                        document.getElementById("label-container").innerText = detectedName;
+                        sendToMicrobit(detectedName);
+                    }
                 }
             }
         }
 
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js');
+        async function sendToMicrobit(name) {
+            if (uartCharacteristic) {
+                try {
+                    const encoder = new TextEncoder();
+                    await uartCharacteristic.writeValue(encoder.encode(name + "\n"));
+                } catch (e) { console.log("Error Bluetooth:", e); }
+            }
         }
     </script>
 </body>
