@@ -61,8 +61,8 @@
     border-radius: 15px;
     width: 90vw;  /* 90% del ancho de la pantalla */
     height: 90vw; /* Mantiene formato cuadrado */
-    max-width: 400px; /* Límite para que no sea gigante en tablets */
-    max-height: 400px;
+    max-width: 800px; /* Límite para que no sea gigante en tablets */
+    max-height: 800;
     overflow: hidden;
     background-color: #000;
     display: none; 
@@ -176,7 +176,7 @@ async function startVisualML(modelUrl, type) {
         model = await tmPose.load(modelJson, metadataJson);
     }
 
-    webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(400, 400, true);
+    webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(800, 800, true);
     await webcam.setup();
     await webcam.play();
     document.getElementById("webcam-container").appendChild(webcam.canvas);
