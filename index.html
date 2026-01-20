@@ -38,9 +38,18 @@
         h1 { font-size: 2.2rem; color: #333; margin: 20px 0; }
 
         .setup-box { 
-            background: white; padding: 30px; border-radius: 20px; 
+            background: white; 
+            padding: 30px; 
+            border-radius: 20px; 
             box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
-            width: 95%; max-width: 450px; touch-action: pan-y;
+            
+            /* CAMBIOS PARA HACERLO MÁS ANGOSTO */
+            width: 85%;           /* Ocupa el 85% del ancho (deja margen a los lados) */
+            max-width: 360px;     /* Límite de ancho para que no se vea estirado */
+            
+            margin: 0 auto;       /* Lo mantiene centrado */
+            box-sizing: border-box; 
+            touch-action: pan-y;
         }
 
         .setup-box p { font-size: 1.3rem; font-weight: bold; margin-bottom: 10px; text-align: left; }
