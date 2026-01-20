@@ -55,11 +55,16 @@
         .setup-box p { font-size: 1.3rem; font-weight: bold; margin-bottom: 10px; text-align: left; }
 
         input, select { 
-            padding: 18px; width: 100%; border: 2px solid #bbb; 
-            border-radius: 12px; margin-bottom: 25px; 
-            font-size: 20px !important; background-color: #fafafa;
+            width: 100%;             /* Ocupa el ancho del contenedor */
+            box-sizing: border-box;  /* ¡CLAVE! Mantiene el input dentro de los bordes */
+            padding: 15px;           /* Un poco menos de espacio para que respire mejor */
+            border: 2px solid #bbb; 
+            border-radius: 12px; 
+            margin-bottom: 20px; 
+            font-size: 18px !important; 
+            background-color: #fafafa;
+            display: block;          /* Asegura que se comporte como bloque centrado */
         }
-
         /* VISTA DE CÁMARA GRANDE */
         #webcam-container { 
             margin: 10px auto; border: 5px solid #333; border-radius: 20px;
