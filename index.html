@@ -112,6 +112,44 @@
             margin-top: 20px; 
             text-transform: uppercase; 
         }
+        
+        <div id="audio-visualizer" style="display: none;">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+    </div>
+
+        #audio-visualizer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 50px;
+    margin: 20px auto;
+}
+
+.bar {
+    width: 8px;
+    height: 10px;
+    background: #007bff;
+    border-radius: 4px;
+    animation: wave 1s ease-in-out infinite;
+}
+
+/* Retrasos para crear el efecto de onda */
+.bar:nth-child(1) { animation-delay: 0.1s; }
+.bar:nth-child(2) { animation-delay: 0.2s; }
+.bar:nth-child(3) { animation-delay: 0.3s; }
+.bar:nth-child(4) { animation-delay: 0.4s; }
+.bar:nth-child(5) { animation-delay: 0.5s; }
+
+@keyframes wave {
+    0%, 100% { height: 10px; }
+    50% { height: 40px; }
+}
+
 
         /* BOTÓN DE CONEXIÓN */
         button { 
@@ -192,6 +230,7 @@
             document.getElementById("setup-ui").style.display = "none";
             
             if (modelType === "audio") {
+                document.getElementById("audio-visualizer").style.display = "flex"; 
                 startAudioML(TM_MODEL_URL);
             } else {
                 document.getElementById("webcam-container").style.display = "block";
@@ -241,20 +280,18 @@ async function startAudioML(modelUrl) {
     const metadata = modelUrl + "metadata.json";
 
     try {
-        // Inicializar el reconocedor
         recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
-        
-        // Esperar carga del modelo
         await recognizer.ensureModelLoaded();
         console.log("Modelo de audio cargado.");
 
-        // Configuración de escucha optimizada para 2026
         recognizer.listen(result => {
             const labels = recognizer.wordLabels();
             let highestScore = 0;
             let bestLabel = "";
 
-            // Encontrar la predicción más alta
+            // 1. OBTENER LAS BARRAS (Para la animación)
+            const bars = document.querySelectorAll('.bar');
+
             for (let i = 0; i < labels.length; i++) {
                 if (result.scores[i] > highestScore) {
                     highestScore = result.scores[i];
@@ -262,17 +299,23 @@ async function startAudioML(modelUrl) {
                 }
             }
 
-            // MEJORA: Filtro estricto de confianza y ruido
-            // 'Background Noise' es la clase por defecto de TM que debemos ignorar
+            // 2. CONTROLAR LA ANIMACIÓN AQUÍ
+            // Si detecta cualquier sonido por encima de un umbral bajo (0.3), acelera las ondas
+            if (highestScore > 0.3) {
+                bars.forEach(b => b.style.animationDuration = "0.4s"); // Rápido
+            } else {
+                bars.forEach(b => b.style.animationDuration = "1.2s"); // Lento (reposo)
+            }
+
+            // 3. PROCESAR PREDICCIÓN PARA BLUETOOTH
             if (highestScore > 0.85 && bestLabel !== "Background Noise") {
-                // Solo procesamos si realmente hay una predicción sólida
                 processPredictions([{ className: bestLabel, probability: highestScore }]);
             }
         }, {
             probabilityThreshold: 0.75,
-            includeSpectrogram: false, // Ahorra CPU y RAM en dispositivos móviles
-            invokeCallbackOnNoise: false, // No dispara el evento si solo hay ruido
-            overlapFactor: 0.5 // Analiza en ventanas de tiempo solapadas para mayor rapidez
+            includeSpectrogram: false,
+            invokeCallbackOnNoise: false,
+            overlapFactor: 0.5 
         });
 
     } catch (error) {
@@ -280,6 +323,7 @@ async function startAudioML(modelUrl) {
         alert("Error: Asegúrate de dar permisos de micrófono y de que el modelo de audio sea válido.");
     }
 }
+
 
 // Función para detener la escucha si es necesario (útil para ahorrar batería)
 async function stopAudioML() {
