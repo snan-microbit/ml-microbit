@@ -130,11 +130,11 @@
 
 <script>
     let model, webcam, recognizer, uartCharacteristic;
-    let bleDevice; // Variable para gestionar la conexión del dispositivo
+    let bleDevice; 
     let lastPrediction = "";
     let modelType = "";
 
-    // BLOQUEO MANUAL DE PELLIZCO (ANTI-ZOOM)
+    // BLOQUEO DE ZOOM
     document.addEventListener('touchmove', (e) => {
         if (e.scale !== 1) { e.preventDefault(); }
     }, { passive: false });
@@ -144,14 +144,14 @@
         modelType = document.getElementById("model-type").value;
         
         if (!urlInput.includes("teachablemachine.withgoogle.com")) {
-            alert("Ingresa una URL válida de Teachable Machine.");
+            alert("Ingresa una URL válida.");
             return;
         }
 
         const TM_MODEL_URL = urlInput.endsWith("/") ? urlInput : urlInput + "/";
 
         try {
-            // 1. MEJORA: Filtro específico para micro:bit (más rápido y limpio)
+            // Solicitud de dispositivo Bluetooth
             bleDevice = await navigator.bluetooth.requestDevice({
                 filters: [
                     { namePrefix: 'BBC micro:bit' },
@@ -160,49 +160,79 @@
                 optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
             });
 
-            // 2. MEJORA: Escuchador de desconexión para informar al usuario
             bleDevice.addEventListener('gattserverdisconnected', () => {
-                alert("Conexión Bluetooth perdida. Por favor, reinicia la conexión.");
+                alert("Conexión perdida.");
                 location.reload(); 
             });
 
             const server = await bleDevice.gatt.connect();
             const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-            
-            // Característica UART RX (para enviar datos de la app a la placa)
             uartCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
             
             document.getElementById("setup-ui").style.display = "none";
             
-           if (modelType === "audio") {
-    // Esto DEBE ejecutarse para que las barras existan en la pantalla
-    const viz = document.getElementById("audio-visualizer");
-    if(viz) viz.style.display = "flex"; 
-    
-    startAudioML(TM_MODEL_URL);
-} else {
+            if (modelType === "audio") {
+                const viz = document.getElementById("audio-visualizer");
+                if(viz) viz.style.display = "flex"; 
+                startAudioML(TM_MODEL_URL);
+            } else {
                 document.getElementById("webcam-container").style.display = "block";
                 startVisualML(TM_MODEL_URL, modelType); 
             }
-
-            console.log("Sistema conectado y listo");
-
         } catch (error) { 
-            console.error("Error detallado:", error); 
-            alert("Error de conexión. Revisa:\n1. Que la placa esté en modo emparejamiento.\n2. Estar usando HTTPS.\n3. Bluetooth activado en el dispositivo.");
+            console.error("Error en init:", error); 
+            alert("Error de conexión. Verifica Bluetooth y HTTPS.");
+        }
+    }
+
+    async function startAudioML(modelUrl) {
+        try {
+            const checkpoint = modelUrl + "model.json";
+            const metadata = modelUrl + "metadata.json";
+            recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
+            await recognizer.ensureModelLoaded();
+
+            recognizer.listen(result => {
+                const labels = recognizer.wordLabels();
+                let highestScore = 0;
+                let bestLabel = "";
+                const bars = document.querySelectorAll('.bar');
+
+                for (let i = 0; i < labels.length; i++) {
+                    if (result.scores[i] > highestScore) {
+                        highestScore = result.scores[i];
+                        bestLabel = labels[i];
+                    }
+                }
+
+                // Animación reactiva
+                bars.forEach((bar) => {
+                    const noise = Math.random() * 0.4;
+                    let scale = (highestScore + noise) * 2.8; 
+                    if (scale < 0.3) scale = 0.3;
+                    if (scale > 3.0) scale = 3.0;
+                    bar.style.transform = `scaleY(${scale})`;
+                    bar.style.backgroundColor = highestScore > 0.7 ? "#ff4757" : "#007bff";
+                });
+
+                if (highestScore > 0.85 && bestLabel !== "Background Noise") {
+                    updateLabelAndSend(bestLabel);
+                }
+            }, { 
+                probabilityThreshold: 0.75,
+                includeSpectrogram: true, 
+                invokeCallbackOnNoise: true 
+            });
+        } catch (e) {
+            console.error("Error en Audio:", e);
         }
     }
 
     async function startVisualML(modelUrl, type) {
         const modelJson = modelUrl + "model.json";
         const metadataJson = modelUrl + "metadata.json";
+        model = (type === "image") ? await tmImage.load(modelJson, metadataJson) : await tmPose.load(modelJson, metadataJson);
         
-        if (type === "image") {
-            model = await tmImage.load(modelJson, metadataJson);
-        } else {
-            model = await tmPose.load(modelJson, metadataJson);
-        }
-
         webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(400, 400, true);
         await webcam.setup();
         await webcam.play();
@@ -216,119 +246,39 @@
         if (modelType === "image") {
             prediction = await model.predict(webcam.canvas);
         } else {
-            const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+            const { posenetOutput } = await model.estimatePose(webcam.canvas);
             prediction = await model.predict(posenetOutput);
         }
         processPredictions(prediction);
         window.requestAnimationFrame(visualLoop);
     }
 
-        async function startAudioML(modelUrl) {
-            const checkpoint = modelUrl + "model.json";
-            const metadata = modelUrl + "metadata.json";
-            recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
-            await recognizer.ensureModelLoaded();
-
-            recognizer.listen(result => {
-                const labels = recognizer.wordLabels();
-                let highestScore = 0;
-                let bestLabel = "";
-                
-                const bars = document.querySelectorAll('.bar');
-
-                // 1. Encontrar la predicción más alta
-                for (let i = 0; i < labels.length; i++) {
-                    if (result.scores[i] > highestScore) {
-                        highestScore = result.scores[i];
-                        bestLabel = labels[i];
-                    }
-                }
-
-                // 2. ANIMACIÓN REACTIVA AL VOLUMEN (Basada en las puntuaciones del espectro)
-                // Usamos el highestScore para escalar las barras de forma individual
-                bars.forEach((bar, index) => {
-                    // Creamos una variación aleatoria pequeña para que parezca un ecualizador real
-                    const noise = Math.random() * 0.4;
-                    // Escala base según la confianza de la predicción + ruido visual
-                    let scale = (highestScore + noise) * 2.5; 
-                    
-                    // Limitamos el tamaño mínimo y máximo
-                    if (scale < 0.2) scale = 0.2;
-                    if (scale > 3.0) scale = 3.0;
-
-                    bar.style.transform = `scaleY(${scale})`;
-                    
-                    // Cambiar color si detecta algo importante
-                    bar.style.backgroundColor = highestScore > 0.7 ? "#ff4757" : "#007bff";
-                });
-
-                // 3. Envío a micro:bit
-                if (highestScore > 0.85 && bestLabel !== "Background Noise") {
-                    updateLabelAndSend(bestLabel);
-                }
-            }, { 
-                probabilityThreshold: 0.75,
-                includeSpectrogram: true, // Requerido para captar mejor los cambios de sonido
-                invokeCallbackOnNoise: true // Permite que las barras se muevan incluso con ruido
-            });
-        }
-
-
-    } catch (error) {
-        console.error("Error crítico en Audio:", error);
-        alert("Error al acceder al micrófono. Asegúrate de estar en HTTPS.");
-    }
-}
-
-
-
-// Función para detener la escucha si es necesario (útil para ahorrar batería)
-async function stopAudioML() {
-    if (recognizer && recognizer.isListening()) {
-        await recognizer.stopListening();
-        console.log("Micrófono desactivado.");
-    }
-}
-
-
     function processPredictions(predictions) {
         if (!predictions) return;
-        for (let i = 0; i < predictions.length; i++) {
-            if (predictions[i].probability > 0.90) {
-                const detectedName = predictions[i].className;
-                if (detectedName !== lastPrediction) {
-                    lastPrediction = detectedName;
-                    document.getElementById("label-container").innerText = detectedName;
-                    sendToMicrobit(detectedName);
-                }
+        for (let p of predictions) {
+            if (p.probability > 0.90 && p.className !== lastPrediction) {
+                updateLabelAndSend(p.className);
             }
         }
     }
 
-    // 3. MEJORA: Función de envío robusta con manejo de errores y codificación limpia
+    function updateLabelAndSend(name) {
+        lastPrediction = name;
+        document.getElementById("label-container").innerText = name;
+        sendToMicrobit(name);
+    }
+
     async function sendToMicrobit(name) {
         if (uartCharacteristic && bleDevice.gatt.connected) {
             try {
                 const encoder = new TextEncoder();
-                // Agregamos "\n" para que micro:bit detecte el final de la línea fácilmente
-                const data = encoder.encode(name + "\n");
-                await uartCharacteristic.writeValue(data);
-                console.log("Transmitido con éxito: " + name);
+                await uartCharacteristic.writeValue(encoder.encode(name + "\n"));
+                console.log("Enviado: " + name);
             } catch (e) { 
-                console.warn("Fallo en transmisión Bluetooth, reintentando...", e); 
-                lastPrediction = ""; // Reset para permitir reintento de la misma etiqueta
+                console.warn("Error envío:", e); 
+                lastPrediction = ""; 
             }
-        } else {
-            console.log("UART no disponible o dispositivo desconectado");
         }
-    }
-
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js')
-                .then(reg => console.log('SW registrado'))
-                .catch(err => console.log('Error SW', err));
-        });
     }
 </script>
 </body>
