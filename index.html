@@ -145,149 +145,159 @@
     <div id="webcam-container"></div>
     <div id="label-container"></div>
 
-    <script>
-        let model, webcam, recognizer, uartCharacteristic;
-        let lastPrediction = "";
-        let modelType = "";
+<script>
+    let model, webcam, recognizer, uartCharacteristic;
+    let bleDevice; // Variable para gestionar la conexión del dispositivo
+    let lastPrediction = "";
+    let modelType = "";
 
-        // BLOQUEO MANUAL DE PELLIZCO (ANTI-ZOOM)
-        document.addEventListener('touchmove', (e) => {
-            if (e.scale !== 1) { e.preventDefault(); }
-        }, { passive: false });
+    // BLOQUEO MANUAL DE PELLIZCO (ANTI-ZOOM)
+    document.addEventListener('touchmove', (e) => {
+        if (e.scale !== 1) { e.preventDefault(); }
+    }, { passive: false });
 
-        async function init() {
-            const urlInput = document.getElementById("model-url").value.trim();
-            modelType = document.getElementById("model-type").value;
-            
-            if (!urlInput.includes("teachablemachine.withgoogle.com")) {
-                alert("Ingresa una URL válida de Teachable Machine.");
-                return;
-            }
-
-            const TM_MODEL_URL = urlInput.endsWith("/") ? urlInput : urlInput + "/";
-
-            try {
-                // BLUETOOTH CON FILTRO MEJORADO
-                 /*const device = await navigator.bluetooth.requestDevice({
-                    filters: [
-                        { namePrefix: 'BBC micro:bit' },
-                        { namePrefix: 'micro:bit' }
-                        {services: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']}
-                    ],
-                    optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
-                }); */
-
-               const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true, 
-                    optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
-                });
-
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-                uartCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
-                
-                document.getElementById("setup-ui").style.display = "none";
-                
-                if (modelType === "audio") {
-                    startAudioML(TM_MODEL_URL);
-                } else {
-                    document.getElementById("webcam-container").style.display = "block";
-                    startVisualML(TM_MODEL_URL, modelType); 
-                }
-            } catch (error) { 
-                console.error(error); 
-                alert("Error de conexión. Asegúrate de usar HTTPS, tener el Bluetooth activo y que la micro:bit esté en modo emparejamiento.");
-            }
+    async function init() {
+        const urlInput = document.getElementById("model-url").value.trim();
+        modelType = document.getElementById("model-type").value;
+        
+        if (!urlInput.includes("teachablemachine.withgoogle.com")) {
+            alert("Ingresa una URL válida de Teachable Machine.");
+            return;
         }
 
-        async function startVisualML(modelUrl, type) {
-            const modelJson = modelUrl + "model.json";
-            const metadataJson = modelUrl + "metadata.json";
-            
-            if (type === "image") {
-                model = await tmImage.load(modelJson, metadataJson);
-            } else {
-                model = await tmPose.load(modelJson, metadataJson);
-            }
+        const TM_MODEL_URL = urlInput.endsWith("/") ? urlInput : urlInput + "/";
 
-            webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(400, 400, true);
-            await webcam.setup();
-            await webcam.play();
-            document.getElementById("webcam-container").appendChild(webcam.canvas);
-            window.requestAnimationFrame(visualLoop);
-        }
-
-        async function visualLoop() {
-            webcam.update();
-            let prediction;
-            if (modelType === "image") {
-                prediction = await model.predict(webcam.canvas);
-            } else {
-                const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
-                prediction = await model.predict(posenetOutput);
-            }
-            processPredictions(prediction);
-            window.requestAnimationFrame(visualLoop);
-        }
-
-        async function startAudioML(modelUrl) {
-            const checkpoint = modelUrl + "model.json";
-            const metadata = modelUrl + "metadata.json";
-            recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
-            await recognizer.ensureModelLoaded();
-
-            recognizer.listen(result => {
-                const labels = recognizer.wordLabels();
-                let highestScore = 0;
-                let bestLabel = "";
-                for (let i = 0; i < labels.length; i++) {
-                    if (result.scores[i] > highestScore) {
-                        highestScore = result.scores[i];
-                        bestLabel = labels[i];
-                    }
-                }
-                if (highestScore > 0.85 && bestLabel !== "Background Noise") {
-                    processPredictions([{ className: bestLabel, probability: highestScore }]);
-                }
-            }, { probabilityThreshold: 0.75 });
-        }
-
-        function processPredictions(predictions) {
-            if (!predictions) return;
-            for (let i = 0; i < predictions.length; i++) {
-                if (predictions[i].probability > 0.90) {
-                    const detectedName = predictions[i].className;
-                    if (detectedName !== lastPrediction) {
-                        lastPrediction = detectedName;
-                        document.getElementById("label-container").innerText = detectedName;
-                        sendToMicrobit(detectedName);
-                    }
-                }
-            }
-        }
-
-        async function sendToMicrobit(name) {
-            if (uartCharacteristic) {
-                try {
-                    const encoder = new TextEncoder();
-                    const data = encoder.encode(name + "\n");
-                    await uartCharacteristic.writeValue(data);
-                    console.log("Enviado a microbit: " + name);
-                } catch (e) { 
-                    console.log("Error al enviar Bluetooth:", e); 
-                    lastPrediction = ""; 
-                }
-            }
-        }
-
-        // REGISTRO DE SERVICE WORKER PARA PWA (INSTALACIÓN)
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
-                    .then(reg => console.log('SW registrado'))
-                    .catch(err => console.log('Error SW', err));
+        try {
+            // 1. MEJORA: Filtro específico para micro:bit (más rápido y limpio)
+            bleDevice = await navigator.bluetooth.requestDevice({
+                filters: [
+                    { namePrefix: 'BBC micro:bit' },
+                    { namePrefix: 'micro:bit' }
+                ],
+                optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
             });
+
+            // 2. MEJORA: Escuchador de desconexión para informar al usuario
+            bleDevice.addEventListener('gattserverdisconnected', () => {
+                alert("Conexión Bluetooth perdida. Por favor, reinicia la conexión.");
+                location.reload(); 
+            });
+
+            const server = await bleDevice.gatt.connect();
+            const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+            
+            // Característica UART RX (para enviar datos de la app a la placa)
+            uartCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+            
+            document.getElementById("setup-ui").style.display = "none";
+            
+            if (modelType === "audio") {
+                startAudioML(TM_MODEL_URL);
+            } else {
+                document.getElementById("webcam-container").style.display = "block";
+                startVisualML(TM_MODEL_URL, modelType); 
+            }
+
+            console.log("Sistema conectado y listo");
+
+        } catch (error) { 
+            console.error("Error detallado:", error); 
+            alert("Error de conexión. Revisa:\n1. Que la placa esté en modo emparejamiento.\n2. Estar usando HTTPS.\n3. Bluetooth activado en el dispositivo.");
         }
-    </script>
+    }
+
+    async function startVisualML(modelUrl, type) {
+        const modelJson = modelUrl + "model.json";
+        const metadataJson = modelUrl + "metadata.json";
+        
+        if (type === "image") {
+            model = await tmImage.load(modelJson, metadataJson);
+        } else {
+            model = await tmPose.load(modelJson, metadataJson);
+        }
+
+        webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(400, 400, true);
+        await webcam.setup();
+        await webcam.play();
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+        window.requestAnimationFrame(visualLoop);
+    }
+
+    async function visualLoop() {
+        webcam.update();
+        let prediction;
+        if (modelType === "image") {
+            prediction = await model.predict(webcam.canvas);
+        } else {
+            const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+            prediction = await model.predict(posenetOutput);
+        }
+        processPredictions(prediction);
+        window.requestAnimationFrame(visualLoop);
+    }
+
+    async function startAudioML(modelUrl) {
+        const checkpoint = modelUrl + "model.json";
+        const metadata = modelUrl + "metadata.json";
+        recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
+        await recognizer.ensureModelLoaded();
+
+        recognizer.listen(result => {
+            const labels = recognizer.wordLabels();
+            let highestScore = 0;
+            let bestLabel = "";
+            for (let i = 0; i < labels.length; i++) {
+                if (result.scores[i] > highestScore) {
+                    highestScore = result.scores[i];
+                    bestLabel = labels[i];
+                }
+            }
+            // Umbral de confianza del 85%
+            if (highestScore > 0.85 && bestLabel !== "Background Noise") {
+                processPredictions([{ className: bestLabel, probability: highestScore }]);
+            }
+        }, { probabilityThreshold: 0.75 });
+    }
+
+    function processPredictions(predictions) {
+        if (!predictions) return;
+        for (let i = 0; i < predictions.length; i++) {
+            if (predictions[i].probability > 0.90) {
+                const detectedName = predictions[i].className;
+                if (detectedName !== lastPrediction) {
+                    lastPrediction = detectedName;
+                    document.getElementById("label-container").innerText = detectedName;
+                    sendToMicrobit(detectedName);
+                }
+            }
+        }
+    }
+
+    // 3. MEJORA: Función de envío robusta con manejo de errores y codificación limpia
+    async function sendToMicrobit(name) {
+        if (uartCharacteristic && bleDevice.gatt.connected) {
+            try {
+                const encoder = new TextEncoder();
+                // Agregamos "\n" para que micro:bit detecte el final de la línea fácilmente
+                const data = encoder.encode(name + "\n");
+                await uartCharacteristic.writeValue(data);
+                console.log("Transmitido con éxito: " + name);
+            } catch (e) { 
+                console.warn("Fallo en transmisión Bluetooth, reintentando...", e); 
+                lastPrediction = ""; // Reset para permitir reintento de la misma etiqueta
+            }
+        } else {
+            console.log("UART no disponible o dispositivo desconectado");
+        }
+    }
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js')
+                .then(reg => console.log('SW registrado'))
+                .catch(err => console.log('Error SW', err));
+        });
+    }
+</script>
 </body>
 </html>
