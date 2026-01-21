@@ -236,28 +236,59 @@
         window.requestAnimationFrame(visualLoop);
     }
 
-    async function startAudioML(modelUrl) {
-        const checkpoint = modelUrl + "model.json";
-        const metadata = modelUrl + "metadata.json";
-        recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
-        await recognizer.ensureModelLoaded();
+async function startAudioML(modelUrl) {
+    const checkpoint = modelUrl + "model.json";
+    const metadata = modelUrl + "metadata.json";
 
+    try {
+        // Inicializar el reconocedor
+        recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
+        
+        // Esperar carga del modelo
+        await recognizer.ensureModelLoaded();
+        console.log("Modelo de audio cargado.");
+
+        // Configuración de escucha optimizada para 2026
         recognizer.listen(result => {
             const labels = recognizer.wordLabels();
             let highestScore = 0;
             let bestLabel = "";
+
+            // Encontrar la predicción más alta
             for (let i = 0; i < labels.length; i++) {
                 if (result.scores[i] > highestScore) {
                     highestScore = result.scores[i];
                     bestLabel = labels[i];
                 }
             }
-            // Umbral de confianza del 85%
+
+            // MEJORA: Filtro estricto de confianza y ruido
+            // 'Background Noise' es la clase por defecto de TM que debemos ignorar
             if (highestScore > 0.85 && bestLabel !== "Background Noise") {
+                // Solo procesamos si realmente hay una predicción sólida
                 processPredictions([{ className: bestLabel, probability: highestScore }]);
             }
-        }, { probabilityThreshold: 0.75 });
+        }, {
+            probabilityThreshold: 0.75,
+            includeSpectrogram: false, // Ahorra CPU y RAM en dispositivos móviles
+            invokeCallbackOnNoise: false, // No dispara el evento si solo hay ruido
+            overlapFactor: 0.5 // Analiza en ventanas de tiempo solapadas para mayor rapidez
+        });
+
+    } catch (error) {
+        console.error("Error en Audio ML:", error);
+        alert("Error: Asegúrate de dar permisos de micrófono y de que el modelo de audio sea válido.");
     }
+}
+
+// Función para detener la escucha si es necesario (útil para ahorrar batería)
+async function stopAudioML() {
+    if (recognizer && recognizer.isListening()) {
+        await recognizer.stopListening();
+        console.log("Micrófono desactivado.");
+    }
+}
+
 
     function processPredictions(predictions) {
         if (!predictions) return;
