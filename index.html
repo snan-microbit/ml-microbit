@@ -10,10 +10,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8.5/dist/teachablemachine-pose.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script>
 
-    <link rel="manifest" href="manifest.json">
-    
     <style>
-        /* CONFIGURACIÓN DE PANTALLA COMPLETA Y BLOQUEO DE ZOOM */
+        /* CONFIGURACIÓN BASE */
         html, body { 
             margin: 0; padding: 0; width: 100%; height: 100%;
             overflow-x: hidden; touch-action: none;
@@ -22,151 +20,85 @@
         }
 
         body { 
-            display: flex;
-            flex-direction: column;
-            align-items: center;      /* Centra horizontalmente */
-            justify-content: center;   /* Centra verticalmente */
-            min-height: 100vh;        /* Usa todo el alto de la pantalla */
-            width: 100%;
-            margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
-            background-color: #f4f4f9;
-            overflow-x: hidden;       /* Evita desplazamiento lateral accidental */
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            min-height: 100vh; padding: 20px; box-sizing: border-box;
         }
 
         h1 { font-size: 2.2rem; color: #333; margin: 20px 0; }
 
         .setup-box { 
-            background: white; 
-            padding: 30px; 
-            border-radius: 20px; 
+            background: white; padding: 30px; border-radius: 20px; 
             box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
-            
-            width: 85%;           
-            max-width: 360px;     
-            margin: 0 auto;       
-            box-sizing: border-box; 
-            touch-action: pan-y;
-        
-            /* NUEVAS LÍNEAS PARA CENTRAR TODO EL CONTENIDO INTERNO */
-            display: flex;
-            flex-direction: column;
-            align-items: center;    /* Centra los elementos horizontalmente */
-            text-align: center;     /* Centra el texto de los párrafos <p> */
+            width: 85%; max-width: 360px; text-align: center;
         }
 
-/* Ajuste para que los textos de los pasos no queden pegados a la izquierda */
-        .setup-box p {
-            font-size: 1.3rem;
-            font-weight: bold;
-            margin-bottom: 10px;
-            width: 100%;            /* Asegura que el texto use todo el ancho para centrarse */
-            text-align: center;     /* Cambiado de 'left' a 'center' */
-        }
+        .setup-box p { font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; }
 
         input, select { 
-            width: 100%;             /* Ocupa el ancho del contenedor */
-            box-sizing: border-box;  /* ¡CLAVE! Mantiene el input dentro de los bordes */
-            padding: 15px;           /* Un poco menos de espacio para que respire mejor */
-            border: 2px solid #bbb; 
-            border-radius: 12px; 
-            margin-bottom: 20px; 
-            font-size: 18px !important; 
+            width: 100%; padding: 15px; border: 2px solid #bbb; 
+            border-radius: 12px; margin-bottom: 20px; font-size: 16px; 
             background-color: #fafafa;
-            display: block;          /* Asegura que se comporte como bloque centrado */
         }
-       /* Contenedor del video centrado */
+
+        /* CONTENEDOR VIDEO */
         #webcam-container { 
-            margin: 20px auto;       /* El 'auto' lo centra horizontalmente */
-            border: 5px solid #333; 
-            border-radius: 20px;
-            width: 80vw;             /* Ancho proporcional al celular */
-            height: 80vw;            /* Mismo alto para que sea un cuadrado perfecto */
-            max-width: 350px;        /* Límite para que no sea gigante en tablets */
-            max-height: 350px;
-            overflow: hidden;        /* Corta lo que sobre del video */
+            margin: 20px auto; border: 5px solid #333; border-radius: 20px;
+            width: 80vw; height: 80vw; max-width: 300px; max-height: 300px;
+            overflow: hidden; display: none; position: relative;
             background-color: #000;
-            display: none;           /* Se activa por JS */
-            position: relative;      /* Necesario para centrar el canvas interno */
-            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
         }
         
-        /* Centrado exacto del video (Canvas) dentro del cuadro */
         #webcam-container canvas {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%); /* Centrado matemático perfecto */
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: cover;       /* Llena el cuadro sin deformarse */
+            width: 100% !important; height: 100% !important; object-fit: cover;
         }
 
-        <div id="audio-visualizer" style="display: none;">
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-        </div>
-        
+        /* --- ANIMACIÓN DE ONDAS (CORREGIDO) --- */
+        #audio-visualizer {
+            display: none; /* Se activa por JS */
+            justify-content: center;
+            align-items: flex-end;
+            gap: 8px;
+            height: 80px;
+            margin: 20px auto;
+        }
+
+        .bar {
+            width: 12px;
+            height: 15px;
+            background-color: #007bff;
+            border-radius: 5px;
+            animation: wave 1s infinite ease-in-out;
+        }
+
+        @keyframes wave {
+            0%, 100% { height: 15px; }
+            50% { height: 60px; }
+        }
+
+        .bar:nth-child(1) { animation-delay: 0.0s; }
+        .bar:nth-child(2) { animation-delay: 0.1s; }
+        .bar:nth-child(3) { animation-delay: 0.2s; }
+        .bar:nth-child(4) { animation-delay: 0.3s; }
+        .bar:nth-child(5) { animation-delay: 0.4s; }
+
         #label-container { 
-            width: 100%;
-            text-align: center;      /* Centra el texto negro gigante */
-            font-size: 45px; 
-            font-weight: 900; 
-            color: #000000; 
-            margin-top: 20px; 
-            text-transform: uppercase; 
+            font-size: 40px; font-weight: 900; color: #000; 
+            margin-top: 10px; text-transform: uppercase; text-align: center;
         }
 
-  #audio-visualizer {
-    display: none; /* Se activa con JS */
-    justify-content: center;
-    align-items: flex-end; /* Alinea las barras abajo para que crezcan hacia arriba */
-    gap: 5px;
-    height: 60px;
-    margin: 20px auto;
-}
-
-.bar {
-    width: 10px;
-    height: 15px;
-    background-color: #007bff;
-    border-radius: 5px;
-    /* La animación 'wave' debe estar definida aquí */
-    animation: wave 1s infinite ease-in-out;
-}
-
-/* Definición del movimiento */
-@keyframes wave {
-    0%, 100% { height: 15px; }
-    50% { height: 50px; }
-}
-
-/* Retrasos para que no todas suban al mismo tiempo (efecto onda) */
-.bar:nth-child(1) { animation-delay: 0.0s; }
-.bar:nth-child(2) { animation-delay: 0.1s; }
-.bar:nth-child(3) { animation-delay: 0.2s; }
-.bar:nth-child(4) { animation-delay: 0.3s; }
-.bar:nth-child(5) { animation-delay: 0.4s; }
-
-
-        /* BOTÓN DE CONEXIÓN */
         button { 
-            width: 100%; padding: 22px; font-size: 22px; font-weight: 900;
+            width: 100%; padding: 20px; font-size: 18px; font-weight: 900;
             background: #28a745; color: white; border: none; border-radius: 15px;
-            text-transform: uppercase; cursor: pointer;
-            box-shadow: 0 4px 10px rgba(40, 167, 69, 0.3);
+            cursor: pointer; text-transform: uppercase;
         }
-
-        button:active { transform: scale(0.97); background: #218838; }
     </style>
 </head>
 <body>
+
     <h1>ML-micro:bit</h1>
 
+    <!-- UI DE CONFIGURACIÓN -->
     <div class="setup-box" id="setup-ui">
         <p>1. Tipo de modelo:</p>
         <select id="model-type">
@@ -176,13 +108,23 @@
         </select>
 
         <p>2. URL de Teachable Machine:</p>
-        <input type="text" id="model-url" placeholder="https://teachablemachine.withgoogle.com..." />
+        <input type="text" id="model-url" placeholder="https://teachablemachine..." />
         
-       <!-- <p>3. Conexión:</p> -->
         <button id="start-btn" onclick="init()">Conectar e Iniciar</button>
     </div>
     
+    <!-- ELEMENTOS DE SALIDA -->
     <div id="webcam-container"></div>
+
+    <!-- AQUÍ ESTÁ EL VISUALIZADOR FUERA DEL CSS -->
+    <div id="audio-visualizer">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+    </div>
+
     <div id="label-container"></div>
 
 <script>
