@@ -103,12 +103,12 @@
             object-fit: cover;       /* Llena el cuadro sin deformarse */
         }
 
-        <div id="audio-visualizer" style="display: none; justify-content: center; align-items: center; gap: 5px; height: 60px;">
-            <div class="bar" style="width:10px; background:#007bff; height:20px; border-radius:5px; animation: wave 1s infinite;"></div>
-            <div class="bar" style="width:10px; background:#007bff; height:20px; border-radius:5px; animation: wave 1s infinite; animation-delay: 0.2s;"></div>
-            <div class="bar" style="width:10px; background:#007bff; height:20px; border-radius:5px; animation: wave 1s infinite; animation-delay: 0.4s;"></div>
-            <div class="bar" style="width:10px; background:#007bff; height:20px; border-radius:5px; animation: wave 1s infinite; animation-delay: 0.6s;"></div>
-            <div class="bar" style="width:10px; background:#007bff; height:20px; border-radius:5px; animation: wave 1s infinite; animation-delay: 0.8s;"></div>
+        <div id="audio-visualizer" style="display: none;">
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
         </div>
         
         #label-container { 
@@ -121,27 +121,36 @@
             text-transform: uppercase; 
         }
 
-   #audio-visualizer {
-    display: none; /* Se activa por JS */
+  #audio-visualizer {
+    display: none; /* Se activa con JS */
     justify-content: center;
-    align-items: center;
-    gap: 8px;
-    height: 80px;
-    margin: 20px 0;
+    align-items: flex-end; /* Alinea las barras abajo para que crezcan hacia arriba */
+    gap: 5px;
+    height: 60px;
+    margin: 20px auto;
 }
 
 .bar {
-    width: 12px;
-    height: 20px;
+    width: 10px;
+    height: 15px;
     background-color: #007bff;
-    border-radius: 6px;
+    border-radius: 5px;
+    /* La animación 'wave' debe estar definida aquí */
     animation: wave 1s infinite ease-in-out;
 }
 
+/* Definición del movimiento */
 @keyframes wave {
-    0%, 100% { transform: scaleY(1); }
-    50% { transform: scaleY(3); }
+    0%, 100% { height: 15px; }
+    50% { height: 50px; }
 }
+
+/* Retrasos para que no todas suban al mismo tiempo (efecto onda) */
+.bar:nth-child(1) { animation-delay: 0.0s; }
+.bar:nth-child(2) { animation-delay: 0.1s; }
+.bar:nth-child(3) { animation-delay: 0.2s; }
+.bar:nth-child(4) { animation-delay: 0.3s; }
+.bar:nth-child(5) { animation-delay: 0.4s; }
 
 
         /* BOTÓN DE CONEXIÓN */
@@ -276,10 +285,13 @@ async function startAudioML(modelUrl) {
     const metadata = modelUrl + "metadata.json";
 
     try {
+        // Pedir permiso de micro antes de cargar (Mejora 2026)
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+
         recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
         await recognizer.ensureModelLoaded();
         
-        // Forzamos que el visualizador se vea antes de empezar
+        // Mostrar el contenedor de barras
         const viz = document.getElementById("audio-visualizer");
         if (viz) viz.style.display = "flex";
 
@@ -295,18 +307,16 @@ async function startAudioML(modelUrl) {
                 }
             }
 
-            // --- ANIMACIÓN SEPARADA (Si falla, no detiene el Bluetooth) ---
-            setTimeout(() => {
-                const bars = document.getElementsByClassName('bar');
-                if (bars && bars.length > 0) {
-                    const duration = highestScore > 0.3 ? "0.4s" : "1.2s";
-                    const color = highestScore > 0.3 ? "#ff4757" : "#007bff";
-                    for (let bar of bars) {
-                        bar.style.animationDuration = duration;
-                        bar.style.backgroundColor = color;
-                    }
-                }
-            }, 0);
+            // --- CONTROL DE ANIMACIÓN ---
+            const bars = document.querySelectorAll('.bar');
+            if (bars.length > 0) {
+                // Si detecta sonido > 0.3, acelerar barras y cambiar color
+                const isActive = highestScore > 0.3;
+                bars.forEach(bar => {
+                    bar.style.animationDuration = isActive ? "0.4s" : "1.2s";
+                    bar.style.backgroundColor = isActive ? "#ff4757" : "#007bff";
+                });
+            }
 
             // --- ENVÍO A MICRO:BIT ---
             if (highestScore > 0.85 && bestLabel !== "Background Noise") {
@@ -319,7 +329,8 @@ async function startAudioML(modelUrl) {
         });
 
     } catch (error) {
-        console.error("Error crítico:", error);
+        console.error("Error crítico en Audio:", error);
+        alert("Error al acceder al micrófono. Asegúrate de estar en HTTPS.");
     }
 }
 
