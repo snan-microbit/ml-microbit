@@ -121,33 +121,26 @@
             text-transform: uppercase; 
         }
 
-        #audio-visualizer {
-    display: flex;
-    align-items: center;
+   #audio-visualizer {
+    display: none; /* Se activa por JS */
     justify-content: center;
-    gap: 5px;
-    height: 50px;
-    margin: 20px auto;
+    align-items: center;
+    gap: 8px;
+    height: 80px;
+    margin: 20px 0;
 }
 
 .bar {
-    width: 8px;
-    height: 10px;
-    background: #007bff;
-    border-radius: 4px;
-    animation: wave 1s ease-in-out infinite;
+    width: 12px;
+    height: 20px;
+    background-color: #007bff;
+    border-radius: 6px;
+    animation: wave 1s infinite ease-in-out;
 }
 
-/* Retrasos para crear el efecto de onda */
-.bar:nth-child(1) { animation-delay: 0.1s; }
-.bar:nth-child(2) { animation-delay: 0.2s; }
-.bar:nth-child(3) { animation-delay: 0.3s; }
-.bar:nth-child(4) { animation-delay: 0.4s; }
-.bar:nth-child(5) { animation-delay: 0.5s; }
-
 @keyframes wave {
-    0%, 100% { height: 10px; }
-    50% { height: 40px; }
+    0%, 100% { transform: scaleY(1); }
+    50% { transform: scaleY(3); }
 }
 
 
@@ -283,47 +276,53 @@ async function startAudioML(modelUrl) {
     const metadata = modelUrl + "metadata.json";
 
     try {
-       recognizer.listen(result => {
-    const labels = recognizer.wordLabels();
-    let highestScore = 0;
-    let bestLabel = "";
+        recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
+        await recognizer.ensureModelLoaded();
+        
+        // Forzamos que el visualizador se vea antes de empezar
+        const viz = document.getElementById("audio-visualizer");
+        if (viz) viz.style.display = "flex";
 
-    // 1. Cálculo de predicción
-    for (let i = 0; i < labels.length; i++) {
-        if (result.scores[i] > highestScore) {
-            highestScore = result.scores[i];
-            bestLabel = labels[i];
-        }
-    }
+        recognizer.listen(result => {
+            const labels = recognizer.wordLabels();
+            let highestScore = 0;
+            let bestLabel = "";
 
-    // 2. Animación Protegida (Si falla aquí, no rompe el Bluetooth)
-    try {
-        const bars = document.querySelectorAll('.bar');
-        if (bars.length > 0) {
-            if (highestScore > 0.3) {
-                bars.forEach(b => b.style.animationDuration = "0.4s");
-                bars.forEach(b => b.style.background = "#ff4757"); // Color activo
-            } else {
-                bars.forEach(b => b.style.animationDuration = "1.2s");
-                bars.forEach(b => b.style.background = "#007bff"); // Color reposo
+            for (let i = 0; i < labels.length; i++) {
+                if (result.scores[i] > highestScore) {
+                    highestScore = result.scores[i];
+                    bestLabel = labels[i];
+                }
             }
-        }
-    } catch (e) { console.warn("Error visual:", e); }
 
-    // 3. Envío a Microbit
-    if (highestScore > 0.85 && bestLabel !== "Background Noise") {
-        processPredictions([{ className: bestLabel, probability: highestScore }]);
-    }
-}, {
-    probabilityThreshold: 0.75,
-    includeSpectrogram: false,
-    invokeCallbackOnNoise: false // IMPORTANTE: No activar con silencio
-});
+            // --- ANIMACIÓN SEPARADA (Si falla, no detiene el Bluetooth) ---
+            setTimeout(() => {
+                const bars = document.getElementsByClassName('bar');
+                if (bars && bars.length > 0) {
+                    const duration = highestScore > 0.3 ? "0.4s" : "1.2s";
+                    const color = highestScore > 0.3 ? "#ff4757" : "#007bff";
+                    for (let bar of bars) {
+                        bar.style.animationDuration = duration;
+                        bar.style.backgroundColor = color;
+                    }
+                }
+            }, 0);
+
+            // --- ENVÍO A MICRO:BIT ---
+            if (highestScore > 0.85 && bestLabel !== "Background Noise") {
+                processPredictions([{ className: bestLabel, probability: highestScore }]);
+            }
+        }, {
+            probabilityThreshold: 0.70,
+            includeSpectrogram: false,
+            invokeCallbackOnNoise: false
+        });
+
     } catch (error) {
-        console.error("Error en Audio ML:", error);
-        alert("Error: Asegúrate de dar permisos de micrófono y de que el modelo de audio sea válido.");
+        console.error("Error crítico:", error);
     }
 }
+
 
 
 // Función para detener la escucha si es necesario (útil para ahorrar batería)
