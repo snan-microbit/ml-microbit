@@ -1,7 +1,9 @@
 {
   "name": "ML micro:bit",
   "short_name": "ML micro:bit",
-  "start_url": "index.html",
+  "description": "Una aplicación para aprendizaje automático con micro:bit",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#007bff",
@@ -16,7 +18,13 @@
       "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
