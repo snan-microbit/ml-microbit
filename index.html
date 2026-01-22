@@ -173,7 +173,7 @@
             const server = await bleDevice.gatt.connect();
             const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
             // Usamos 0002 para escritura (TX) como mencionamos antes
-            uartCharacteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+            uartCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
             
             document.getElementById("setup-ui").style.display = "none";
             
