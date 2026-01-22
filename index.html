@@ -265,7 +265,7 @@
     container.innerHTML = ""; // Limpiamos cualquier canvas previo congelado
     container.appendChild(webcam.canvas); // Añadimos el nuevo canvas activo
     
-    window.requestAnimationFrame(loop);
+    window.requestAnimationFrame(visualLoop);
 }
 
    async function visualLoop() {
