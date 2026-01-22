@@ -126,6 +126,8 @@
     let lastPrediction = "";
     let modelType = "";
 
+    tf.setBackend('webgl'); // O 'webgpu' si el dispositivo es moderno
+
     // BLOQUEO DE ZOOM
     document.addEventListener('touchmove', (e) => {
         if (e.scale !== 1) { e.preventDefault(); }
@@ -248,7 +250,7 @@
         const metadataJson = modelUrl + "metadata.json";
         model = (type === "image") ? await tmImage.load(modelJson, metadataJson) : await tmPose.load(modelJson, metadataJson);
         
-        webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(400, 400, true);
+        webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(224, 224, true);
         await webcam.setup();
         await webcam.play();
         document.getElementById("webcam-container").appendChild(webcam.canvas);
