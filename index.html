@@ -10,127 +10,291 @@
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8.5/dist/teachablemachine-pose.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script>
 
-     <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; font-family: sans-serif; background-color: #f4f4f9; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .setup-box { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 85%; max-width: 360px; text-align: center; }
-        input { width: 100%; padding: 15px; border: 2px solid #bbb; border-radius: 12px; margin-bottom: 20px; font-size: 16px; box-sizing: border-box; }
-        button { width: 100%; padding: 20px; font-size: 18px; font-weight: 900; background: #28a745; color: white; border: none; border-radius: 15px; cursor: pointer; text-transform: uppercase; }
-        #webcam-container { margin: 20px auto; border: 5px solid #333; border-radius: 20px; overflow: hidden; display: none; width: 400px; height: 400px; }
-        #audio-visualizer { display: none; justify-content: center; align-items: flex-end; gap: 8px; height: 80px; margin: 20px; }
-        .bar { width: 12px; height: 20px; background-color: #007bff; border-radius: 5px; transition: transform 0.1s; transform-origin: bottom; }
-        #label-container { font-size: 32px; font-weight: 900; margin-top: 10px; text-align: center; }
+    <style>
+        /* CONFIGURACIÓN BASE */
+        html, body { 
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow-x: hidden; touch-action: none;
+            font-family: 'Segoe UI', Roboto, sans-serif; 
+            background-color: #f4f4f9; 
+        }
+
+        body { 
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            min-height: 100vh; padding: 20px; box-sizing: border-box;
+        }
+
+        h1 { font-size: 2.2rem; color: #333; margin: 20px 0; }
+
+        .setup-box { 
+            background: white; padding: 30px; border-radius: 20px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+            width: 85%; max-width: 360px; text-align: center;
+        }
+
+        .setup-box p { font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; }
+
+        input, select { 
+            width: 100%; padding: 15px; border: 2px solid #bbb; 
+            border-radius: 12px; margin-bottom: 20px; font-size: 16px; 
+            background-color: #fafafa;
+        }
+
+        /* CONTENEDOR VIDEO */
+        #webcam-container { 
+            margin: 20px auto; border: 5px solid #333; border-radius: 20px;
+            width: 80vw; height: 80vw; max-width: 300px; max-height: 300px;
+            overflow: hidden; display: none; position: relative;
+            background-color: #000;
+        }
+        
+        #webcam-container canvas {
+            width: 100% !important; height: 100% !important; object-fit: cover;
+        }
+
+        /* --- ANIMACIÓN DE ONDAS (CORREGIDO) --- */
+        #audio-visualizer {
+            display: none; /* Se activa por JS */
+            justify-content: center;
+            align-items: flex-end;
+            gap: 8px;
+            height: 80px;
+            margin: 20px auto;
+        }
+
+        .bar {
+            width: 12px;
+            height: 30px; /* Altura base */
+            background-color: #007bff;
+            border-radius: 5px;
+            transition: transform 0.2s ease-out; /* Suaviza el movimiento reactivo */
+            transform-origin: bottom; /* Hace que crezcan desde abajo hacia arriba */
+        }
+
+        @keyframes wave {
+            0%, 100% { height: 15px; }
+            50% { height: 60px; }
+        }
+
+        .bar:nth-child(1) { animation-delay: 0.0s; }
+        .bar:nth-child(2) { animation-delay: 0.1s; }
+        .bar:nth-child(3) { animation-delay: 0.2s; }
+        .bar:nth-child(4) { animation-delay: 0.3s; }
+        .bar:nth-child(5) { animation-delay: 0.4s; }
+
+        #label-container { 
+            font-size: 40px; font-weight: 900; color: #000; 
+            margin-top: 10px; text-transform: uppercase; text-align: center;
+        }
+
+        button { 
+            width: 100%; padding: 20px; font-size: 18px; font-weight: 900;
+            background: #28a745; color: white; border: none; border-radius: 15px;
+            cursor: pointer; text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
 
     <h1>ML-micro:bit</h1>
 
+    <!-- UI DE CONFIGURACIÓN -->
     <div class="setup-box" id="setup-ui">
         <p>URL de Teachable Machine:</p>
         <input type="text" id="model-url" placeholder="https://teachablemachine..." />
-        <button onclick="init()">Conectar e Iniciar</button>
+        <button id="start-btn" onclick="init()">Conectar e Iniciar</button>
     </div>
     
+    <!-- ELEMENTOS DE SALIDA -->
     <div id="webcam-container"></div>
 
+    <!-- AQUÍ ESTÁ EL VISUALIZADOR FUERA DEL CSS -->
     <div id="audio-visualizer">
-        <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
     </div>
 
-    <script>
-        let model, webcam, recognizer, uartCharacteristic, bleDevice;
-        let lastPrediction = "";
-        let modelType = "";
+    <div id="label-container"></div>
 
-        async function detectModelType(baseUrl) {
-            try {
-                const response = await fetch(baseUrl + "metadata.json");
-                const data = await response.json();
-                return data.wordLabels ? "audio" : "image";
-            } catch (e) { return "image"; }
-        }
+<script>
+    let model, webcam, recognizer, uartCharacteristic;
+    let bleDevice; 
+    let lastPrediction = "";
+    let modelType = "";
 
-        async function init() {
-            const urlInput = document.getElementById("model-url").value.trim();
-            if (!urlInput.includes("teachablemachine.withgoogle.com")) return alert("URL no válida");
+    // BLOQUEO DE ZOOM
+    document.addEventListener('touchmove', (e) => {
+        if (e.scale !== 1) { e.preventDefault(); }
+    }, { passive: false });
 
-            const TM_URL = urlInput.endsWith("/") ? urlInput : urlInput + "/";
+    async function detectModelType(baseUrl) {
+        try {
+            const response = await fetch(baseUrl + "metadata.json");
+            const metadata = await response.json();
             
-            try {
-                modelType = await detectModelType(TM_URL);
-                
-                bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'BBC micro:bit' }, { namePrefix: 'micro:bit' }],
-                    optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
-                });
-
-                const server = await bleDevice.gatt.connect();
-                const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-                // Usamos 0003 que es el que confirmaste que funciona para recibir en tu placa
-                uartCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
-
-                document.getElementById("setup-ui").style.display = "none";
-
-                if (modelType === "audio") {
-                    document.getElementById("audio-visualizer").style.display = "flex";
-                    startAudioML(TM_URL);
-                } else {
-                    document.getElementById("webcam-container").style.display = "block";
-                    startImageML(TM_URL);
-                }
-            } catch (err) { alert("Error de conexión"); }
+            // En 2026, TM organiza los metadatos por tipo de modelo
+            if (metadata.packageName === "@teachablemachine/image") return "image";
+            if (metadata.packageName === "@teachablemachine/pose") return "pose";
+            
+            // El modelo de audio suele tener una estructura diferente o palabras clave específicas
+            if (metadata.wordLabels || metadata.sampleRate) return "audio";
+            
+            return "image"; // Por defecto
+        } catch (e) {
+            console.error("Error detectando modelo:", e);
+            return "image";
         }
+    }
 
-        async function startImageML(url) {
-            model = await tmImage.load(url + "model.json", url + "metadata.json");
-            webcam = new tmImage.Webcam(400, 400, true);
-            await webcam.setup();
-            await webcam.play();
-            document.getElementById("webcam-container").appendChild(webcam.canvas);
-            loop();
+    async function init() {
+        const urlInput = document.getElementById("model-url").value.trim();
+        if (!urlInput.includes("teachablemachine.withgoogle.com")) {
+            alert("Ingresa una URL válida.");
+            return;
         }
-
-        async function loop() {
-            webcam.update();
-            const prediction = await model.predict(webcam.canvas);
-            processPredictions(prediction);
-            window.requestAnimationFrame(loop);
+    
+        const TM_MODEL_URL = urlInput.endsWith("/") ? urlInput : urlInput + "/";
+    
+        try {
+            // --- DETECCIÓN AUTOMÁTICA ---
+            modelType = await detectModelType(TM_MODEL_URL);
+            console.log("Modelo detectado:", modelType);
+    
+            // --- CONEXIÓN BLUETOOTH ---
+            bleDevice = await navigator.bluetooth.requestDevice({
+                filters: [{ namePrefix: 'BBC micro:bit' }, { namePrefix: 'micro:bit' }],
+                optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+            });
+    
+            const server = await bleDevice.gatt.connect();
+            const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+            // Usamos 0002 para escritura (TX) como mencionamos antes
+            uartCharacteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+            
+            document.getElementById("setup-ui").style.display = "none";
+            
+            // --- INICIALIZACIÓN SEGÚN TIPO ---
+            if (modelType === "audio") {
+                document.getElementById("audio-visualizer").style.display = "flex"; 
+                startAudioML(TM_MODEL_URL);
+            } else {
+                document.getElementById("webcam-container").style.display = "block";
+                startVisualML(TM_MODEL_URL, modelType); 
+            }
+        } catch (error) { 
+            console.error("Error:", error);
+            alert("Error de conexión. Asegúrate de que el micro:bit esté en modo emparejamiento.");
         }
-
-        async function startAudioML(url) {
-            recognizer = speechCommands.create("BROWSER_FFT", undefined, url + "model.json", url + "metadata.json");
+    }
+    async function startAudioML(modelUrl) {
+        try {
+            const checkpoint = modelUrl + "model.json";
+            const metadata = modelUrl + "metadata.json";
+            recognizer = speechCommands.create("BROWSER_FFT", undefined, checkpoint, metadata);
             await recognizer.ensureModelLoaded();
+
             recognizer.listen(result => {
                 const labels = recognizer.wordLabels();
-                let highIdx = result.scores.indexOf(Math.max(...result.scores));
-                let score = result.scores[highIdx];
-                
-                document.querySelectorAll('.bar').forEach(b => {
-                    b.style.transform = `scaleY(${(score * 2.5) + Math.random()})`;
+                let highestScore = 0;
+                let bestLabel = "";
+                const bars = document.querySelectorAll('.bar');
+
+                for (let i = 0; i < labels.length; i++) {
+                    if (result.scores[i] > highestScore) {
+                        highestScore = result.scores[i];
+                        bestLabel = labels[i];
+                    }
+                }
+
+                // Animación reactiva corregida
+                bars.forEach((bar) => {
+                    // Solo una declaración de noise
+                    const noise = Math.random() * 0.1; 
+                    
+                    // Multiplicador bajo (1.5) para que no sea tan sensible al ruido ambiente
+                    let scale = (highestScore * 1.5) + noise; 
+                    
+                    // Umbral de reposo: si el sonido es muy bajo, escala mínima
+                    if (highestScore < 0.2) {
+                        scale = 0.2; 
+                    }
+                    
+                    if (scale > 2.5) scale = 2.5;
+
+                    bar.style.transform = `scaleY(${scale})`;
+                    bar.style.backgroundColor = highestScore > 0.7 ? "#ff4757" : "#007bff";
                 });
 
-                if (score > 0.85 && labels[highIdx] !== "Background Noise") {
-                    updateLabelAndSend(labels[highIdx]);
+                if (highestScore > 0.85 && bestLabel !== "Background Noise") {
+                    updateLabelAndSend(bestLabel);
                 }
-            }, { probabilityThreshold: 0.85 });
+            }, { 
+                probabilityThreshold: 0.85, // Umbral alto para mayor precisión
+                includeSpectrogram: true, 
+                invokeCallbackOnNoise: true 
+            });
+        } catch (e) {
+            console.error("Error en Audio:", e);
         }
+    }
 
-        function processPredictions(predictions) {
-            for (let p of predictions) {
-                if (p.probability > 0.90 && p.className !== lastPrediction) {
-                    updateLabelAndSend(p.className);
-                }
+
+    async function startVisualML(modelUrl, type) {
+        const modelJson = modelUrl + "model.json";
+        const metadataJson = modelUrl + "metadata.json";
+        model = (type === "image") ? await tmImage.load(modelJson, metadataJson) : await tmPose.load(modelJson, metadataJson);
+        
+        webcam = new (type === "image" ? tmImage.Webcam : tmPose.Webcam)(400, 400, true);
+        await webcam.setup();
+        await webcam.play();
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+        window.requestAnimationFrame(visualLoop);
+    }
+
+    async function visualLoop() {
+        webcam.update();
+        let prediction;
+        if (modelType === "image") {
+            prediction = await model.predict(webcam.canvas);
+        } else {
+            const { posenetOutput } = await model.estimatePose(webcam.canvas);
+            prediction = await model.predict(posenetOutput);
+        }
+        processPredictions(prediction);
+        window.requestAnimationFrame(visualLoop);
+    }
+
+    function processPredictions(predictions) {
+        if (!predictions) return;
+        for (let p of predictions) {
+            if (p.probability > 0.90 && p.className !== lastPrediction) {
+                updateLabelAndSend(p.className);
             }
         }
+    }
 
-        function updateLabelAndSend(name) {
-            lastPrediction = name;
-            document.getElementById("label-container").innerText = name;
-            if (uartCharacteristic && bleDevice.gatt.connected) {
+    function updateLabelAndSend(name) {
+        lastPrediction = name;
+        document.getElementById("label-container").innerText = name;
+        sendToMicrobit(name);
+    }
+
+    async function sendToMicrobit(name) {
+        if (uartCharacteristic && bleDevice.gatt.connected) {
+            try {
                 const encoder = new TextEncoder();
-                uartCharacteristic.writeValue(encoder.encode(name + "\n")).catch(e => console.log(e));
+                await uartCharacteristic.writeValue(encoder.encode(name + "\n"));
+                console.log("Enviado: " + name);
+            } catch (e) { 
+                console.warn("Error envío:", e); 
+                lastPrediction = ""; 
             }
         }
-    </script>
+    }
+</script>
 </body>
 </html>
