@@ -259,11 +259,14 @@
     if (bleDevice && bleDevice.gatt.connected) {
         await bleDevice.gatt.disconnect();
     }
+        
 
-    // 4. Resetear UI
-    document.getElementById("setup-ui").style.display = "block";
+    // 3. LIMPIEZA DE INTERFAZ (Lo que pides)
+    document.getElementById("setup-ui").style.display = "flex"; // Volver a mostrar el panel
     document.getElementById("audio-visualizer").style.display = "none";
-    document.getElementById("label-container").innerText = "";
+    document.getElementById("label-container").innerText = ""; // <-- ESTO BORRA LA CLASE
+    
+    // 4. Resetear variables de control
     lastPrediction = "";
 }
     async function startAudioML(modelUrl) {
