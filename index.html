@@ -30,15 +30,21 @@
         .setup-box { 
             background: white; padding: 30px; border-radius: 20px; 
             box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
-            width: 85%; max-width: 360px; text-align: center;
+            width: 85%; max-width: 360px; 
+            text-align: center;
+            display: flex; flex-direction: column; align-items: center;
+            box-sizing: border-box;
         }
 
-        .setup-box p { font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; }
+        .setup-box p { font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; width: 100%; }
 
-        input, select { 
+        /* INPUT CENTRADO CORREGIDO */
+        input#model-url { 
             width: 100%; padding: 15px; border: 2px solid #bbb; 
             border-radius: 12px; margin-bottom: 20px; font-size: 16px; 
             background-color: #fafafa;
+            box-sizing: border-box; /* Evita que el padding lo desplace */
+            display: block;
         }
 
         /* CONTENEDOR VIDEO */
@@ -53,35 +59,19 @@
             width: 100% !important; height: 100% !important; object-fit: cover;
         }
 
-        /* --- ANIMACIÓN DE ONDAS (CORREGIDO) --- */
+        /* ANIMACIÓN DE ONDAS REACTIVA */
         #audio-visualizer {
-            display: none; /* Se activa por JS */
-            justify-content: center;
-            align-items: flex-end;
-            gap: 8px;
-            height: 80px;
-            margin: 20px auto;
+            display: none; 
+            justify-content: center; align-items: flex-end;
+            gap: 8px; height: 80px; margin: 20px auto;
         }
 
         .bar {
-            width: 12px;
-            height: 30px; /* Altura base */
-            background-color: #007bff;
-            border-radius: 5px;
-            transition: transform 0.2s ease-out; /* Suaviza el movimiento reactivo */
-            transform-origin: bottom; /* Hace que crezcan desde abajo hacia arriba */
+            width: 12px; height: 15px;
+            background-color: #007bff; border-radius: 5px;
+            transition: transform 0.1s ease-out;
+            transform-origin: bottom;
         }
-
-        @keyframes wave {
-            0%, 100% { height: 15px; }
-            50% { height: 60px; }
-        }
-
-        .bar:nth-child(1) { animation-delay: 0.0s; }
-        .bar:nth-child(2) { animation-delay: 0.1s; }
-        .bar:nth-child(3) { animation-delay: 0.2s; }
-        .bar:nth-child(4) { animation-delay: 0.3s; }
-        .bar:nth-child(5) { animation-delay: 0.4s; }
 
         #label-container { 
             font-size: 40px; font-weight: 900; color: #000; 
@@ -99,17 +89,14 @@
 
     <h1>ML-micro:bit</h1>
 
-    <!-- UI DE CONFIGURACIÓN -->
     <div class="setup-box" id="setup-ui">
         <p>URL de Teachable Machine:</p>
         <input type="text" id="model-url" placeholder="https://teachablemachine..." />
         <button id="start-btn" onclick="init()">Conectar e Iniciar</button>
     </div>
     
-    <!-- ELEMENTOS DE SALIDA -->
     <div id="webcam-container"></div>
 
-    <!-- AQUÍ ESTÁ EL VISUALIZADOR FUERA DEL CSS -->
     <div id="audio-visualizer">
         <div class="bar"></div>
         <div class="bar"></div>
@@ -119,6 +106,7 @@
     </div>
 
     <div id="label-container"></div>
+
 
 <script>
     let model, webcam, recognizer, uartCharacteristic;
